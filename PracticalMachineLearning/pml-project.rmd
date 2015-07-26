@@ -1,0 +1,77 @@
+---
+title: "Classification of activity by machine learning."
+author: "Olga Kruglova"
+date: "Monday, July 20, 2015"
+output: html_document
+---
+##Synopsis
+This project utilizes data set obtained as a result of the activity recognition study. 
+For this purpose people participated in the study wore motion detectors on various parts of the body: arm (arm-band), waist (belt), hand (glove and dumbbell, which was held in hand). Participants were asked to perform the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specifcation (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). The goal of the project was to build a model that can correctly classify each type of the exercise, based on available variables. The dataset was divided into training and testing parts in order to train and test a model for future predictions. 
+
+##Data
+
+First of all, data have been downloaded and loaded into R. 
+```{r}
+setwd("~/Data_Science_class/Practical_Machine_Learning")
+fileUrlTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+fileUrlTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#download.file(fileUrlTest, destfile = "./pml-testing.csv")
+#download.file(fileUrlTrain, destfile = "./pml-training.csv")
+Training <- read.csv("./pml-training.csv", header = TRUE, na.strings=c("","."," ","<NA>", "NA"))
+Test <- read.csv("./pml-testing.csv", , header = TRUE, na.strings=c("","."," ","<NA>", "NA"))
+```
+Let us look at the dataset.
+```{r}
+dim(Training)
+```
+Dataset has a considerable number of variables, 160, but an important question is how many of them can be disregarded due to the NA. It appears that 100 variables contain 19216 NA's, which corresponds to 98% of observations.
+```{r}
+count_NA <- sapply(Training, function(x) {sum(is.na(x))})
+table(count_NA)
+```
+Therefore, all columns with NA's will be discarded.
+```{r}
+listNA <- colnames(Training)[colSums(is.na(Training)) > 0]
+TrainingN <- Training[, -which(names(Training) %in% listNA)]
+str(TrainingN)
+```
+After cleaning data dataset will be divided into two for model training and testing with the ratio 60:40, disregarding also the first seven columns, because they contain information, which is not relevant for this particular classification, namely, row number, username, date, time, time and numerical windows.
+
+##The Model
+
+```{r}
+options(warn = -1)
+library(caret)
+library(kernlab)
+set.seed(1551)
+inTrain <- createDataPartition(y = TrainingN$classe, p = 0.6, list = FALSE)
+training <- TrainingN[inTrain, -c(1:7)]
+testing <- TrainingN[-inTrain, -c(1:7)]
+```
+The most efficient algorithms for classifications are random forest and boosting, since their blend was used and performed quite well in Netflix competition. Let us use both algorithms and see how well they will perform for our classification problem.
+```{r, cache=TRUE}
+options(warn = -1)
+modFitRF <-  train(classe~., method = "rf", data = training)
+saveRDS(modFitRF, "RF.RDS")
+modFitRF <- readRDS("RF.RDS")
+predRF <- predict(modFitRF, testing[, -53])
+confusionMatrix(predRF, testing$classe)
+```
+The accuracy for the random forest algorithm is 0.9885 or 98.85%. The out-of-sample error is 1- accuracy, which gives 0.0115 or 1.15%
+```{r, cache=TRUE}
+options(warn = -1)
+modFitBoost <- train(classe~., method = "gbm", data = training, verbose = FALSE)
+saveRDS(modFitBoost, "Boost.RDS")
+modFitBoost <- readRDS("Boost.RDS")
+predBoost <- predict(modFitBoost, testing[, -53])
+confusionMatrix(predBoost, testing$classe)
+```
+The accuracy for the boosting is 0.9615 or 95.68%. The out-of-sample error 0.0385 or 3.85%. So, the random forest algorithm has a better accuracy as well as low out-of-sample error. For that reason it will be used for the final test, which consist of 20 observations. The accuracy of about 99% is expected for this particular dataset.
+
+```{r}
+TestN <- Test[, -which(names(Test) %in% listNA)]
+testRF <- predict(modFitRF, TestN[, -60])
+testRF
+```
+After submission of files, containing class of the type of the exercise, the score was 20 out 20, which confirms that the prediction accuracy was quite high.
+
